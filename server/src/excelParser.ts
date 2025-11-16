@@ -1,43 +1,98 @@
 import ExcelJS from "exceljs";
 import { Buffer as NodeBuffer } from "node:buffer";
-import { OrderRecord } from "./types";
 import { toGregorian } from "jalaali-js";
+import { OrderRecord } from "./types";
+
+type CellPrimitive = string | number | boolean | Date | null;
+type NormalizedRow = Record<string, CellPrimitive>;
+
+const COLUMN_ALIASES: Record<string, string[]> = {
+  orderId: ["order_id", "orderid", "شناسه سفارش", "شماره سفارش", "سفارش"],
+  fcName: ["fc_name", "fulfillment_center", "مرکز پردازش", "انبار", "fc"],
+  sellerName: ["seller_name", "seller", "فروشنده", "فروشگاه"],
+  courierName: ["courier_name", "carrier", "courier", "کوریر", "شرکت پستی"],
+  province: ["province", "استان"],
+  city: ["city", "شهر"],
+  hasCod: ["has_cod", "cod", "پرداخت در محل", "cod_flag"],
+  orderValue: ["order_value", "order amount", "ارزش سفارش", "مبلغ سفارش"],
+  courierShippingCost: [
+    "courier_shipping_cost",
+    "shipping_cost",
+    "هزینه ارسال",
+    "هزینه پست"
+  ],
+  courierReturnCost: [
+    "courier_return_cost",
+    "return_cost",
+    "هزینه مرجوعی",
+    "هزینه بازگشت"
+  ],
+  orderCreatedDate: [
+    "order_created_date",
+    "order_date",
+    "تاریخ ثبت سفارش",
+    "تاریخ سفارش"
+  ],
+  orderCreatedTime: ["order_created_time", "ساعت ثبت سفارش", "ساعت سفارش"],
+  warehouseExitDate: [
+    "warehouse_exit_date",
+    "تاریخ خروج از انبار",
+    "تاریخ خروج"
+  ],
+  warehouseExitTime: ["warehouse_exit_time", "ساعت خروج از انبار", "ساعت خروج"],
+  opsCompletedDate: [
+    "ops_completed_date",
+    "تاریخ پایان عملیات",
+    "تاریخ پایان کار"
+  ],
+  opsCompletedTime: [
+    "ops_completed_time",
+    "ساعت پایان عملیات",
+    "ساعت پایان کار"
+  ],
+  returnDate: ["return_date", "تاریخ عودت", "تاریخ مرجوع"],
+  orderItemCount: [
+    "order_item_count",
+    "item_count",
+    "تعداد اقلام",
+    "تعداد آیتم"
+  ],
+  lineUnitCount: ["line_unit_count", "unit_count", "تعداد واحد"],
+  laborHours: ["labor_hours", "نفرساعت", "ساعت کار"]
+};
+
+const REQUIRED_FOR_ROW = ["orderId"];
 
 function toNumber(value: any): number | null {
   if (value === null || value === undefined) return null;
-  if (typeof value === "number") return value;
-  const s = String(value).replace(/,/g, "").trim();
+  if (typeof value === "number") return Number.isNaN(value) ? null : value;
+  const s = normalizeString(value).replace(/,/g, "");
   if (!s) return null;
   const n = Number(s);
   return Number.isNaN(n) ? null : n;
 }
 
-function normalize(value: any): string {
-  return String(value ?? "").trim();
+function normalizeDigits(input: string): string {
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  return input.replace(/[۰-۹]/g, (d) => String(persianDigits.indexOf(d)));
 }
 
-function parseJalaliDate(dateValue: any, timeValue: any): Date | null {
-  const dateStr = normalize(dateValue);
-  if (!dateStr) return null;
-  const parts = dateStr.split("-").map((p) => Number(p));
-  if (parts.length !== 3 || parts.some((p) => Number.isNaN(p))) return null;
-  const [jy, jm, jd] = parts;
-  const { gy, gm, gd } = toGregorian(jy, jm, jd);
-
-  let h = 0,
-    m = 0,
-    s = 0;
-  const timeStr = normalize(timeValue);
-  if (timeStr) {
-    const tp = timeStr.split(":").map((p) => Number(p));
-    h = tp[0] ?? 0;
-    m = tp[1] ?? 0;
-    s = tp[2] ?? 0;
-  }
-  return new Date(gy, gm - 1, gd, h, m, s);
+function normalizeString(value: any): string {
+  if (value === null || value === undefined) return "";
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
-type CellPrimitive = string | number | boolean | Date | null;
+function normalizeKey(value: any): string {
+  const base = normalizeDigits(normalizeString(value))
+    .replace(/[ي]/g, "ی")
+    .replace(/[ك]/g, "ک");
+  return base
+    .toLowerCase()
+    .replace(/[\s\-_\/\\|,.،]+/g, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
 
 function cellValueToPrimitive(value: ExcelJS.CellValue): CellPrimitive {
   if (value === null || value === undefined) return null;
@@ -61,7 +116,7 @@ function cellValueToPrimitive(value: ExcelJS.CellValue): CellPrimitive {
   return value as string | number | boolean | Date;
 }
 
-function recordHasValue(record: Record<string, any>): boolean {
+function recordHasValue(record: NormalizedRow): boolean {
   return Object.values(record).some((value) => {
     if (value === null || value === undefined) return false;
     if (typeof value === "string") return value.trim().length > 0;
@@ -69,7 +124,7 @@ function recordHasValue(record: Record<string, any>): boolean {
   });
 }
 
-async function extractRows(buffer: NodeBuffer): Promise<Record<string, any>[]> {
+async function extractRows(buffer: NodeBuffer): Promise<NormalizedRow[]> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(NodeBuffer.from(buffer) as any);
   const worksheet = workbook.worksheets[0];
@@ -78,13 +133,13 @@ async function extractRows(buffer: NodeBuffer): Promise<Record<string, any>[]> {
   const headers = new Map<number, string>();
   worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
     const header = cellValueToPrimitive(cell.value);
-    headers.set(colNumber, header == null ? "" : String(header));
+    headers.set(colNumber, header == null ? "" : normalizeKey(header));
   });
 
-  const rows: Record<string, any>[] = [];
+  const rows: NormalizedRow[] = [];
   worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
     if (rowNumber === 1) return;
-    const record: Record<string, any> = {};
+    const record: NormalizedRow = {};
     for (const [colNumber, header] of headers.entries()) {
       if (!header) continue;
       const cell = row.getCell(colNumber);
@@ -97,37 +152,198 @@ async function extractRows(buffer: NodeBuffer): Promise<Record<string, any>[]> {
   return rows;
 }
 
-export async function parseExcel(buffer: NodeBuffer): Promise<OrderRecord[]> {
-  const rows = await extractRows(buffer);
+function findValue(row: NormalizedRow, aliases: string[]): CellPrimitive {
+  for (const alias of aliases) {
+    const key = normalizeKey(alias);
+    if (key in row) return row[key];
+  }
+  return null;
+}
 
-  const records: OrderRecord[] = rows.map((r) => ({
-    orderId: normalize(r["O'U.OO�U� O3U?OO�O'"]),
-    fcName: normalize(r["U+OU. U.O�UcO� U_O�O_OO�O'"]),
-    sellerName: normalize(r["U?O�U^O'U_OU�"]),
-    orderValue: toNumber(r["OO�O�O' O3U?OO�O'"]),
-    orderCreatedAt: parseJalaliDate(r["O�OO�UOOr O�O\"O� O3U?OO�O'"], r["O3OO1O� O�O\"O� O3U?OO�O'"]),
-    opsCompletedAt: parseJalaliDate(
-      r["O�OO�UOOr U_OUOOU+ UcOO� O1U.U,UOOO�"],
-      r["O3OO1O� U_OUOOU+ UcOO� O1U.U,UOOO�"]
-    ),
-    warehouseExitAt: parseJalaliDate(
-      r["O�OO�UOOr OrO�U^O� OO� OU+O\"OO�"],
-      r["O3OO1O� OrO�U^O� OO� OU+O\"OO�"]
-    )
-  }));
+function toBoolean(value: any): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  const s = normalizeString(value).toLowerCase();
+  if (!s) return null;
+  if (["yes", "y", "true", "cod", "پرداخت در محل"].includes(s)) return true;
+  if (["no", "n", "false", "غیر cod", "غیرکد"].includes(s)) return false;
+  return null;
+}
 
-  const map = new Map<string, OrderRecord>();
-  for (const rec of records) {
-    if (!rec.orderId) continue;
-    const ex = map.get(rec.orderId);
-    if (!ex) {
-      map.set(rec.orderId, rec);
-    } else {
-      if (ex.orderValue == null && rec.orderValue != null) ex.orderValue = rec.orderValue;
-      if (!ex.orderCreatedAt && rec.orderCreatedAt) ex.orderCreatedAt = rec.orderCreatedAt;
-      if (!ex.opsCompletedAt && rec.opsCompletedAt) ex.opsCompletedAt = rec.opsCompletedAt;
-      if (!ex.warehouseExitAt && rec.warehouseExitAt) ex.warehouseExitAt = rec.warehouseExitAt;
+function parseDate(value: any): Date | null {
+  if (value instanceof Date) return value;
+  const str = normalizeDigits(normalizeString(value));
+  if (!str) return null;
+
+  const parts = str.split(" ");
+  const [datePart, timePart] = parts.length > 1 ? [parts[0], parts[1]] : [str, ""];
+
+  const dateDelims = datePart.split(/[-/.]/).filter(Boolean);
+  if (dateDelims.length === 3) {
+    const [a, b, c] = dateDelims.map((p) => Number(p));
+    if ([a, b, c].some((n) => Number.isNaN(n))) return null;
+    const looksJalali = a > 1200;
+    if (looksJalali) {
+      const { gy, gm, gd } = toGregorian(a, b, c);
+      return new Date(gy, gm - 1, gd);
+    }
+    return new Date(a, b - 1, c);
+  }
+
+  const numeric = Number(str);
+  if (!Number.isNaN(numeric)) {
+    const epoch = Date.parse("1899-12-30T00:00:00Z"); // Excel serial date start
+    const date = new Date(epoch + numeric * 24 * 60 * 60 * 1000);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  if (timePart) {
+    const date = new Date();
+    const [h, m, s] = timePart.split(":").map((p) => Number(p || 0));
+    if (![h, m, s].some((n) => Number.isNaN(n))) {
+      date.setHours(h, m, s || 0, 0);
+      return date;
     }
   }
-  return Array.from(map.values());
+
+  return null;
+}
+
+function parseDateTime(dateValue: any, timeValue: any, fallbackDateTime: any = null): Date | null {
+  const date = parseDate(dateValue);
+  const timeStr = normalizeString(timeValue);
+  if (date && timeStr) {
+    const [h, m, s] = normalizeDigits(timeStr)
+      .split(":")
+      .map((p) => Number(p || 0));
+    if (![h, m, s].some((n) => Number.isNaN(n))) {
+      date.setHours(h, m, s || 0, 0);
+    }
+    return date;
+  }
+
+  if (date) return date;
+
+  if (fallbackDateTime) {
+    const dt = parseDate(fallbackDateTime);
+    if (dt) return dt;
+  }
+
+  return null;
+}
+
+function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord {
+  const sum = (a: number | null, b: number | null) =>
+    a == null && b == null ? null : (a || 0) + (b || 0);
+
+  const pick = <T>(a: T, b: T): T => (a == null || a === "" ? b : a);
+
+  return {
+    orderId: existing.orderId || incoming.orderId,
+    fcName: pick(existing.fcName, incoming.fcName),
+    sellerName: pick(existing.sellerName, incoming.sellerName),
+    courierName: pick(existing.courierName, incoming.courierName),
+    province: pick(existing.province, incoming.province),
+    city: pick(existing.city, incoming.city),
+    hasCod: existing.hasCod ?? incoming.hasCod,
+
+    orderValue: pick(existing.orderValue, incoming.orderValue),
+    courierShippingCost: pick(existing.courierShippingCost, incoming.courierShippingCost),
+    courierReturnCost: pick(existing.courierReturnCost, incoming.courierReturnCost),
+
+    orderCreatedAt: existing.orderCreatedAt ?? incoming.orderCreatedAt,
+    opsCompletedAt: existing.opsCompletedAt ?? incoming.opsCompletedAt,
+    warehouseExitAt: existing.warehouseExitAt ?? incoming.warehouseExitAt,
+    returnDate: existing.returnDate ?? incoming.returnDate,
+
+    orderItemCount: sum(existing.orderItemCount, incoming.orderItemCount),
+    lineUnitCount: sum(existing.lineUnitCount, incoming.lineUnitCount),
+    laborHours: sum(existing.laborHours, incoming.laborHours)
+  };
+}
+
+function buildOrderFromRow(row: NormalizedRow): OrderRecord | null {
+  const get = (key: keyof typeof COLUMN_ALIASES) =>
+    findValue(row, COLUMN_ALIASES[key] || []);
+
+  const orderId = normalizeString(get("orderId"));
+  if (!orderId) return null;
+
+  const orderCreatedAt = parseDateTime(
+    get("orderCreatedDate"),
+    get("orderCreatedTime"),
+    get("orderCreatedDate")
+  );
+  const opsCompletedAt = parseDateTime(
+    get("opsCompletedDate"),
+    get("opsCompletedTime"),
+    get("opsCompletedDate")
+  );
+  const warehouseExitAt = parseDateTime(
+    get("warehouseExitDate"),
+    get("warehouseExitTime"),
+    get("warehouseExitDate")
+  );
+  const returnDate = parseDateTime(get("returnDate"), null, get("returnDate"));
+
+  return {
+    orderId,
+    fcName: normalizeString(get("fcName")),
+    sellerName: normalizeString(get("sellerName")),
+    courierName: normalizeString(get("courierName")),
+    province: normalizeString(get("province")),
+    city: normalizeString(get("city")),
+    hasCod: toBoolean(get("hasCod")),
+
+    orderValue: toNumber(get("orderValue")),
+    courierShippingCost: toNumber(get("courierShippingCost")),
+    courierReturnCost: toNumber(get("courierReturnCost")),
+
+    orderCreatedAt,
+    opsCompletedAt,
+    warehouseExitAt,
+    returnDate,
+
+    orderItemCount: toNumber(get("orderItemCount")),
+    lineUnitCount: toNumber(get("lineUnitCount")),
+    laborHours: toNumber(get("laborHours"))
+  };
+}
+
+export async function parseExcel(buffer: NodeBuffer): Promise<OrderRecord[]> {
+  const rows = await extractRows(buffer);
+  if (rows.length === 0) {
+    throw new Error("Sheet is empty یا هیچ داده‌ای خوانده نشد");
+  }
+
+  const normalizedColumns = new Set<string>();
+  Object.keys(rows[0] || {}).forEach((key) => normalizedColumns.add(key));
+
+  const missingRequired = REQUIRED_FOR_ROW.filter(
+    (key) =>
+      !COLUMN_ALIASES[key]?.some((alias) => normalizedColumns.has(normalizeKey(alias)))
+  );
+
+  if (missingRequired.length) {
+    throw new Error(
+      `ستون‌های اجباری پیدا نشد: ${missingRequired
+        .map((c) => COLUMN_ALIASES[c]?.[0] || c)
+        .join(", ")}`
+    );
+  }
+
+  const merged = new Map<string, OrderRecord>();
+  for (const row of rows) {
+    const order = buildOrderFromRow(row);
+    if (!order) continue;
+    const existing = merged.get(order.orderId);
+    if (!existing) {
+      merged.set(order.orderId, order);
+    } else {
+      merged.set(order.orderId, mergeOrders(existing, order));
+    }
+  }
+
+  return Array.from(merged.values());
 }
