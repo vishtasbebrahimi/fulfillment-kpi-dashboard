@@ -140,7 +140,20 @@ function formatDate(value: string | null) {
   return d.toLocaleString();
 }
 
-function buildQuery(filters: Filters, search: string, sort?: SortState, page = 1, pageSize = 20) {
+type QueryOptions = {
+  search?: string;
+  sort?: SortState;
+  page?: number;
+  pageSize?: number;
+};
+
+function buildQuery(filters: Filters, opts: QueryOptions = {}) {
+  const {
+    search = "",
+    sort,
+    page = 1,
+    pageSize = 20
+  } = opts;
   const params = new URLSearchParams();
   if (filters.fcName) params.set("fcName", filters.fcName);
   if (filters.sellerName) params.set("sellerName", filters.sellerName);
@@ -207,7 +220,8 @@ export function DashboardPage() {
     try {
       setKpisLoading(true);
       setKpisError(null);
-      const query = buildQuery(filters, orderSearch, undefined, 1, 10);
+      // KPIها را مستقل از سرچ جدول سفارش نگه داریم تا نمودارها خالی نشوند
+      const query = buildQuery(filters);
       const res = await fetch(`/api/kpis?${query}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
@@ -225,7 +239,7 @@ export function DashboardPage() {
     try {
       setOrdersLoading(true);
       setOrdersError(null);
-      const query = buildQuery(filters, orderSearch, sort, page, pageSize);
+      const query = buildQuery(filters, { search: orderSearch, sort, page, pageSize });
       const res = await fetch(`/api/orders?${query}`);
       if (!res.ok) throw new Error(await res.text());
       const data: OrdersResponse = await res.json();
