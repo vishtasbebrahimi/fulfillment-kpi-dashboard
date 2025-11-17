@@ -226,6 +226,11 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
   const unitsPerLaborHour =
     totalLaborHours > 0 && totalUnits > 0 ? totalUnits / totalLaborHours : null;
 
+  const averageOrderValue =
+    orderValueCount === 0 ? null : orderValueSum / orderValueCount;
+  const averageShippingCost =
+    shippingCostCount === 0 ? null : shippingCostSum / shippingCostCount;
+
   const trend = Array.from(trendMap.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, v]) => ({
@@ -239,9 +244,24 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
     shipRatioEligibleSumValue > 0
       ? (shipRatioEligibleSumCost / shipRatioEligibleSumValue) * 100
       : null;
+
+  const ratioFromAverages =
+    averageOrderValue != null &&
+    averageOrderValue > 0 &&
+    averageShippingCost != null
+      ? (averageShippingCost / averageOrderValue) * 100
+      : null;
+
+  const shippingCostRatioAvg =
+    ratioFromAverages != null
+      ? ratioFromAverages
+      : ratioTotalsAvg != null
+        ? ratioTotalsAvg
+        : ratioStats.avg;
+
   const shippingCostRatio: Stats = {
     ...ratioStats,
-    avg: ratioTotalsAvg != null ? ratioTotalsAvg : ratioStats.avg
+    avg: shippingCostRatioAvg
   };
 
   const returnRateByFc = Array.from(returnByFc.entries()).map(([fcName, v]) => ({
@@ -264,10 +284,9 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
     stagingHours: summarize(stagingList),
     sameDayRate: sameDayEligible === 0 ? null : (sameDayCount / sameDayEligible) * 100,
     returnRate: orders.length === 0 ? null : (ordersReturned / orders.length) * 100,
-    averageOrderValue: orderValueCount === 0 ? null : orderValueSum / orderValueCount,
-    averageShippingCost:
-      shippingCostCount === 0 ? null : shippingCostSum / shippingCostCount,
-    shippingCostRatio: summarize(shipRatioList),
+    averageOrderValue,
+    averageShippingCost,
+    shippingCostRatio,
     itemsPerLaborHour,
     unitsPerLaborHour,
     ordersCount: orders.length,
