@@ -75,6 +75,12 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 };
 
 const REQUIRED_FOR_ROW = ["orderId"];
+const REQUIRED_FOR_PROCESSING = [
+  "orderCreatedDate",
+  "orderCreatedTime",
+  "opsCompletedDate",
+  "opsCompletedTime"
+];
 
 function toNumber(value: any): number | null {
   if (value === null || value === undefined) return null;
@@ -190,7 +196,7 @@ function parseDate(value: any): Date | null {
   if (!str) return null;
 
   const parts = str.split(" ");
-  const [datePart, timePart] = parts.length > 1 ? [parts[0], parts[1]] : [str, ""];
+  const [datePart] = parts.length > 1 ? [parts[0]] : [str];
 
   const dateDelims = datePart.split(/[-/.]/).filter(Boolean);
   if (dateDelims.length === 3) {
@@ -199,15 +205,7 @@ function parseDate(value: any): Date | null {
     const looksJalali = a > 1200;
     const { gy, gm, gd } = looksJalali ? toGregorian(a, b, c) : { gy: a, gm: b, gd: c };
     const base = new Date(gy, gm - 1, gd);
-
-    if (timePart) {
-      const [h, m, s] = normalizeDigits(timePart)
-        .split(":")
-        .map((p) => Number(p || 0));
-      if (![h, m, s].some((n) => Number.isNaN(n))) {
-        base.setHours(h, m, s || 0, 0);
-      }
-    }
+    if (Number.isNaN(base.getTime())) return null;
     return base;
   }
 
@@ -218,39 +216,37 @@ function parseDate(value: any): Date | null {
     if (!Number.isNaN(date.getTime())) return date;
   }
 
-  if (timePart) {
-    const date = new Date();
-    const [h, m, s] = timePart.split(":").map((p) => Number(p || 0));
-    if (![h, m, s].some((n) => Number.isNaN(n))) {
-      date.setHours(h, m, s || 0, 0);
-      return date;
-    }
-  }
-
   return null;
 }
 
-function parseDateTime(dateValue: any, timeValue: any, fallbackDateTime: any = null): Date | null {
+function parseDateTime(
+  dateValue: any,
+  timeValue: any,
+  fallbackDateTime: any = null,
+  requireTime = false
+): Date | null {
   const date = parseDate(dateValue);
   const timeStr = normalizeString(timeValue);
-  if (date && timeStr) {
+
+  if (!date) {
+    if (fallbackDateTime) return parseDateTime(fallbackDateTime, null, null, requireTime);
+    return null;
+  }
+
+  if (requireTime && !timeStr) return null;
+
+  if (timeStr) {
     const [h, m, s] = normalizeDigits(timeStr)
       .split(":")
       .map((p) => Number(p || 0));
     if (![h, m, s].some((n) => Number.isNaN(n))) {
       date.setHours(h, m, s || 0, 0);
+    } else if (requireTime) {
+      return null;
     }
-    return date;
   }
 
-  if (date) return date;
-
-  if (fallbackDateTime) {
-    const dt = parseDate(fallbackDateTime);
-    if (dt) return dt;
-  }
-
-  return null;
+  return date;
 }
 
 function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord {
@@ -293,12 +289,14 @@ function buildOrderFromRow(row: NormalizedRow): OrderRecord | null {
   const orderCreatedAt = parseDateTime(
     get("orderCreatedDate"),
     get("orderCreatedTime"),
-    get("orderCreatedDate")
+    get("orderCreatedDate"),
+    false // missing time defaults to 00:00:00
   );
   const opsCompletedAt = parseDateTime(
     get("opsCompletedDate"),
     get("opsCompletedTime"),
-    get("opsCompletedDate")
+    get("opsCompletedDate"),
+    true // require time for processing time KPI
   );
   const warehouseExitAt = parseDateTime(
     get("warehouseExitDate"),
@@ -340,14 +338,19 @@ export async function parseExcel(buffer: NodeBuffer): Promise<OrderRecord[]> {
   const normalizedColumns = new Set<string>();
   Object.keys(rows[0] || {}).forEach((key) => normalizedColumns.add(key));
 
-  const missingRequired = REQUIRED_FOR_ROW.filter(
-    (key) =>
-      !COLUMN_ALIASES[key]?.some((alias) => normalizedColumns.has(normalizeKey(alias)))
-  );
+  const findMissing = (required: string[]) =>
+    required.filter(
+      (key) =>
+        !COLUMN_ALIASES[key]?.some((alias) => normalizedColumns.has(normalizeKey(alias)))
+    );
 
-  if (missingRequired.length) {
+  const missingRequired = findMissing(REQUIRED_FOR_ROW);
+  const missingProcessing = findMissing(REQUIRED_FOR_PROCESSING);
+
+  const missingAll = [...missingRequired, ...missingProcessing];
+  if (missingAll.length) {
     throw new Error(
-      `ستون‌های اجباری پیدا نشد: ${missingRequired
+      `ستون‌های اجباری پیدا نشد: ${missingAll
         .map((c) => COLUMN_ALIASES[c]?.[0] || c)
         .join(", ")}`
     );

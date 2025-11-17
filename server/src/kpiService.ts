@@ -85,7 +85,15 @@ function metricsForOrder(o: OrderRecord): OrderMetrics {
     o.orderCreatedAt && o.warehouseExitAt
       ? isSameDay(o.orderCreatedAt, o.warehouseExitAt)
       : false;
-  return { woctHours, processingHours, stagingHours, shipCostRatio, isReturned, sameDay };
+  return {
+    woctHours: woctHours != null && woctHours >= 0 ? woctHours : null,
+    processingHours:
+      processingHours != null && processingHours >= 0 ? processingHours : null,
+    stagingHours: stagingHours != null && stagingHours >= 0 ? stagingHours : null,
+    shipCostRatio: shipCostRatio != null && shipCostRatio >= 0 ? shipCostRatio : null,
+    isReturned,
+    sameDay
+  };
 }
 
 export function computeOrderMetrics(o: OrderRecord) {
