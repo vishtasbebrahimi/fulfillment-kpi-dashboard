@@ -90,7 +90,10 @@ const REQUIRED_FOR_PROCESSING = [
 function toNumber(value: any): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === "number") return Number.isNaN(value) ? null : value;
-  const s = normalizeString(value).replace(/,/g, "");
+  const s = normalizeDigits(normalizeString(value))
+    .replace(/,/g, "")
+    .replace(/٬/g, "")
+    .replace(/،/g, "");
   if (!s) return null;
   const n = Number(s);
   return Number.isNaN(n) ? null : n;
