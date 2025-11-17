@@ -77,7 +77,7 @@ function metricsForOrder(o: OrderRecord): OrderMetrics {
   const processingHours = diffHours(o.orderCreatedAt, o.opsCompletedAt);
   const stagingHours = diffHours(o.opsCompletedAt, o.warehouseExitAt);
   const shipCostRatio =
-    o.orderValue && o.orderValue > 0 && o.courierShippingCost != null
+    o.orderValue && o.orderValue > 0 && o.courierShippingCost != null && o.courierShippingCost >= 0
       ? (o.courierShippingCost / o.orderValue) * 100
       : null;
   const isReturned = (o.courierReturnCost ?? 0) > 0 || Boolean(o.returnDate);
@@ -157,7 +157,7 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
       orderValueCount += 1;
     }
 
-    if (o.courierShippingCost != null) {
+    if (o.courierShippingCost != null && o.courierShippingCost >= 0) {
       shippingCostSum += o.courierShippingCost;
       shippingCostCount += 1;
     }

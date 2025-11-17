@@ -19,7 +19,8 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "courier_shipping_cost",
     "shipping_cost",
     "هزینه ارسال",
-    "هزینه پست"
+    "هزینه پست",
+    "هزینه ارسال کوریر"
   ],
   courierReturnCost: [
     "courier_return_cost",
