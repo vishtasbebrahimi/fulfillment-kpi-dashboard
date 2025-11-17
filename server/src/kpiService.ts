@@ -146,6 +146,10 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
   let totalLaborHours = 0;
   let totalUnits = 0;
 
+  // TODO: وقتی ستون/منبع labor_hours واقعی اضافه شد، HARD_CODED_LABOR_HOURS را حذف و
+  // از totalLaborHours استفاده کن. فعلاً طبق ورودی شما (15 نفر در شیفت 8 ساعته) = 120 ساعت.
+  const HARD_CODED_LABOR_HOURS = 15 * 8;
+
   const trendMap = new Map<string, { woct: number[]; proc: number[] }>();
   const returnByFc = new Map<string, { returned: number; total: number }>();
   const productivityByFc = new Map<
@@ -226,6 +230,21 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
   const unitsPerLaborHour =
     totalLaborHours > 0 && totalUnits > 0 ? totalUnits / totalLaborHours : null;
 
+  // Fallback برای نبود ستون labor_hours: با 120 نفرساعت ثابت محاسبه شود.
+  const itemsPerLaborHourWithFallback =
+    itemsPerLaborHour != null
+      ? itemsPerLaborHour
+      : HARD_CODED_LABOR_HOURS > 0
+        ? totalItems / HARD_CODED_LABOR_HOURS
+        : null;
+
+  const unitsPerLaborHourWithFallback =
+    unitsPerLaborHour != null
+      ? unitsPerLaborHour
+      : HARD_CODED_LABOR_HOURS > 0 && totalUnits > 0
+        ? totalUnits / HARD_CODED_LABOR_HOURS
+        : null;
+
   const averageOrderValue =
     orderValueCount === 0 ? null : orderValueSum / orderValueCount;
   const averageShippingCost =
@@ -287,8 +306,8 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
     averageOrderValue,
     averageShippingCost,
     shippingCostRatio,
-    itemsPerLaborHour,
-    unitsPerLaborHour,
+    itemsPerLaborHour: itemsPerLaborHourWithFallback,
+    unitsPerLaborHour: unitsPerLaborHourWithFallback,
     ordersCount: orders.length,
     trend,
     returnRateByFc,
