@@ -115,6 +115,18 @@ export function computeOrderMetrics(o: OrderRecord) {
 }
 
 export function computeKpis(orders: OrderRecord[]): KpiResult {
+  // اطمینان از محاسبه در سطح سفارش (نه لاین): اگر به هر دلیلی orderId تکراری باشد
+  // فقط اولین رکورد برای KPIها لحاظ می‌شود.
+  const uniqueOrders: OrderRecord[] = [];
+  const seen = new Set<string>();
+  for (const o of orders) {
+    const key = (o.orderId || "").trim().toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueOrders.push(o);
+  }
+
   const woctList: number[] = [];
   const processingList: number[] = [];
   const stagingList: number[] = [];
@@ -142,7 +154,7 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
   let nonCodCount = 0;
   const courierDist = new Map<string, number>();
 
-  for (const o of orders) {
+  for (const o of uniqueOrders) {
     const m = metricsForOrder(o);
 
     if (m.woctHours != null && !Number.isNaN(m.woctHours)) woctList.push(m.woctHours);
