@@ -36,6 +36,7 @@ type OrderMetrics = {
   processingHours: number | null;
   stagingHours: number | null;
   shipCostRatio: number | null;
+  shippingCostPerOrder: number | null;
   isReturned: boolean;
   sameDay: boolean;
 };
@@ -76,9 +77,14 @@ function metricsForOrder(o: OrderRecord): OrderMetrics {
   const woctHours = diffHours(o.orderCreatedAt, o.warehouseExitAt);
   const processingHours = diffHours(o.orderCreatedAt, o.opsCompletedAt);
   const stagingHours = diffHours(o.opsCompletedAt, o.warehouseExitAt);
+  const shippingCostPerOrder =
+    o.courierShippingCost != null && o.courierShippingCost >= 0 ? o.courierShippingCost : null;
   const shipCostRatio =
-    o.orderValue && o.orderValue > 0 && o.courierShippingCost != null && o.courierShippingCost >= 0
-      ? (o.courierShippingCost / o.orderValue) * 100
+    o.orderValue &&
+    o.orderValue > 0 &&
+    shippingCostPerOrder != null &&
+    shippingCostPerOrder >= 0
+      ? (shippingCostPerOrder / o.orderValue) * 100
       : null;
   const isReturned = (o.courierReturnCost ?? 0) > 0 || Boolean(o.returnDate);
   const sameDay =
@@ -91,6 +97,7 @@ function metricsForOrder(o: OrderRecord): OrderMetrics {
       processingHours != null && processingHours >= 0 ? processingHours : null,
     stagingHours: stagingHours != null && stagingHours >= 0 ? stagingHours : null,
     shipCostRatio: shipCostRatio != null && shipCostRatio >= 0 ? shipCostRatio : null,
+    shippingCostPerOrder,
     isReturned,
     sameDay
   };
@@ -157,8 +164,8 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
       orderValueCount += 1;
     }
 
-    if (o.courierShippingCost != null && o.courierShippingCost >= 0) {
-      shippingCostSum += o.courierShippingCost;
+    if (m.shippingCostPerOrder != null) {
+      shippingCostSum += m.shippingCostPerOrder;
       shippingCostCount += 1;
     }
 
