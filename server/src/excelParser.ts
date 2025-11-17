@@ -25,6 +25,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "courier_return_cost",
     "return_cost",
     "هزینه مرجوعی",
+    "هزینه عودت کوریر",
     "هزینه بازگشت"
   ],
   orderCreatedDate: [
@@ -65,7 +66,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "ساعت پایان پردازش",
     "ساعت پایان آماده سازی"
   ],
-  returnDate: ["return_date", "تاریخ عودت", "تاریخ مرجوع"],
+  returnDate: ["return_date", "تاریخ عودت", "تاریخ عودت سفارش", "تاریخ مرجوع"],
   returnTime: ["return_time", "ساعت عودت", "ساعت عودت سفارش"],
   orderItemCount: [
     "order_item_count",
