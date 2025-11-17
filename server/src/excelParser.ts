@@ -73,10 +73,11 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "order_item_count",
     "item_count",
     "تعداد اقلام",
+    "تعداد اقلام سفارش",
     "تعداد آیتم"
   ],
   lineUnitCount: ["line_unit_count", "unit_count", "تعداد واحد"],
-  laborHours: ["labor_hours", "نفرساعت", "ساعت کار"]
+  laborHours: ["labor_hours", "نفرساعت", "ساعت کار", "نفرساعت عملیات"]
 };
 
 const REQUIRED_FOR_ROW = ["orderId"];
@@ -262,6 +263,8 @@ function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord 
     a == null && b == null ? null : (a || 0) + (b || 0);
   const maxVal = (a: number | null, b: number | null) =>
     a == null ? b : b == null ? a : Math.max(a, b);
+  const firstNonNull = (a: number | null, b: number | null) =>
+    a == null ? b : a;
 
   const pick = <T>(a: T, b: T): T => (a == null || a === "" ? b : a);
 
@@ -285,9 +288,9 @@ function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord 
     warehouseExitAt: existing.warehouseExitAt ?? incoming.warehouseExitAt,
     returnDate: existing.returnDate ?? incoming.returnDate,
 
-    orderItemCount: sum(existing.orderItemCount, incoming.orderItemCount),
+    orderItemCount: maxVal(existing.orderItemCount, incoming.orderItemCount),
     lineUnitCount: sum(existing.lineUnitCount, incoming.lineUnitCount),
-    laborHours: sum(existing.laborHours, incoming.laborHours)
+    laborHours: firstNonNull(existing.laborHours, incoming.laborHours)
   };
 }
 
