@@ -260,6 +260,8 @@ function parseDateTime(
 function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord {
   const sum = (a: number | null, b: number | null) =>
     a == null && b == null ? null : (a || 0) + (b || 0);
+  const maxVal = (a: number | null, b: number | null) =>
+    a == null ? b : b == null ? a : Math.max(a, b);
 
   const pick = <T>(a: T, b: T): T => (a == null || a === "" ? b : a);
 
@@ -272,9 +274,11 @@ function mergeOrders(existing: OrderRecord, incoming: OrderRecord): OrderRecord 
     city: pick(existing.city, incoming.city),
     hasCod: existing.hasCod ?? incoming.hasCod,
 
-    orderValue: pick(existing.orderValue, incoming.orderValue),
-    courierShippingCost: pick(existing.courierShippingCost, incoming.courierShippingCost),
-    courierReturnCost: pick(existing.courierReturnCost, incoming.courierReturnCost),
+    // اگر چند لاین برای سفارش باشد و مقدار تکراری در همه لاین‌ها آمده، max عملاً همان مقدار را برمی‌گرداند.
+    // اگر لاین‌ها ناهم‌خوان باشند، max از underestimate جلوگیری می‌کند.
+    orderValue: maxVal(existing.orderValue, incoming.orderValue),
+    courierShippingCost: maxVal(existing.courierShippingCost, incoming.courierShippingCost),
+    courierReturnCost: maxVal(existing.courierReturnCost, incoming.courierReturnCost),
 
     orderCreatedAt: existing.orderCreatedAt ?? incoming.orderCreatedAt,
     opsCompletedAt: existing.opsCompletedAt ?? incoming.opsCompletedAt,
