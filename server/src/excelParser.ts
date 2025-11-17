@@ -42,13 +42,26 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   warehouseExitTime: ["warehouse_exit_time", "ساعت خروج از انبار", "ساعت خروج"],
   opsCompletedDate: [
     "ops_completed_date",
+    "ops_completed_at",
+    "operation_completed_at",
+    "processing_completed_at",
+    "processing_end_date",
+    "operation_end_date",
     "تاریخ پایان عملیات",
-    "تاریخ پایان کار"
+    "تاریخ پایان کار",
+    "تاریخ پایان پردازش",
+    "تاریخ اتمام پردازش",
+    "تاریخ پایان آماده سازی"
   ],
   opsCompletedTime: [
     "ops_completed_time",
+    "operation_completed_time",
+    "processing_end_time",
+    "operation_end_time",
     "ساعت پایان عملیات",
-    "ساعت پایان کار"
+    "ساعت پایان کار",
+    "ساعت پایان پردازش",
+    "ساعت پایان آماده سازی"
   ],
   returnDate: ["return_date", "تاریخ عودت", "تاریخ مرجوع"],
   orderItemCount: [
@@ -184,11 +197,18 @@ function parseDate(value: any): Date | null {
     const [a, b, c] = dateDelims.map((p) => Number(p));
     if ([a, b, c].some((n) => Number.isNaN(n))) return null;
     const looksJalali = a > 1200;
-    if (looksJalali) {
-      const { gy, gm, gd } = toGregorian(a, b, c);
-      return new Date(gy, gm - 1, gd);
+    const { gy, gm, gd } = looksJalali ? toGregorian(a, b, c) : { gy: a, gm: b, gd: c };
+    const base = new Date(gy, gm - 1, gd);
+
+    if (timePart) {
+      const [h, m, s] = normalizeDigits(timePart)
+        .split(":")
+        .map((p) => Number(p || 0));
+      if (![h, m, s].some((n) => Number.isNaN(n))) {
+        base.setHours(h, m, s || 0, 0);
+      }
     }
-    return new Date(a, b - 1, c);
+    return base;
   }
 
   const numeric = Number(str);
