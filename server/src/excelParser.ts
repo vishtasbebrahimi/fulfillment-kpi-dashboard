@@ -66,6 +66,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
     "ساعت پایان آماده سازی"
   ],
   returnDate: ["return_date", "تاریخ عودت", "تاریخ مرجوع"],
+  returnTime: ["return_time", "ساعت عودت", "ساعت عودت سفارش"],
   orderItemCount: [
     "order_item_count",
     "item_count",
@@ -305,7 +306,12 @@ function buildOrderFromRow(row: NormalizedRow): OrderRecord | null {
     get("warehouseExitTime"),
     get("warehouseExitDate")
   );
-  const returnDate = parseDateTime(get("returnDate"), null, get("returnDate"));
+  const returnDate = parseDateTime(
+    get("returnDate"),
+    get("returnTime"),
+    get("returnDate"),
+    false
+  );
 
   return {
     orderId,
