@@ -131,6 +131,8 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
   const processingList: number[] = [];
   const stagingList: number[] = [];
   const shipRatioList: number[] = [];
+  let shipRatioEligibleSumCost = 0;
+  let shipRatioEligibleSumValue = 0;
 
   let sameDayEligible = 0;
   let sameDayCount = 0;
@@ -161,8 +163,11 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
     if (m.processingHours != null && !Number.isNaN(m.processingHours))
       processingList.push(m.processingHours);
     if (m.stagingHours != null && !Number.isNaN(m.stagingHours)) stagingList.push(m.stagingHours);
-    if (m.shipCostRatio != null && !Number.isNaN(m.shipCostRatio))
+    if (m.shipCostRatio != null && !Number.isNaN(m.shipCostRatio)) {
       shipRatioList.push(m.shipCostRatio);
+      shipRatioEligibleSumCost += m.shippingCostPerOrder ?? 0;
+      shipRatioEligibleSumValue += o.orderValue ?? 0;
+    }
 
     if (o.orderCreatedAt && o.warehouseExitAt) {
       sameDayEligible += 1;
@@ -228,6 +233,16 @@ export function computeKpis(orders: OrderRecord[]): KpiResult {
       woctHours: v.woct.length ? v.woct.reduce((a, b) => a + b, 0) / v.woct.length : null,
       processingHours: v.proc.length ? v.proc.reduce((a, b) => a + b, 0) / v.proc.length : null
     }));
+
+  const ratioStats = summarize(shipRatioList);
+  const ratioTotalsAvg =
+    shipRatioEligibleSumValue > 0
+      ? (shipRatioEligibleSumCost / shipRatioEligibleSumValue) * 100
+      : null;
+  const shippingCostRatio: Stats = {
+    ...ratioStats,
+    avg: ratioTotalsAvg != null ? ratioTotalsAvg : ratioStats.avg
+  };
 
   const returnRateByFc = Array.from(returnByFc.entries()).map(([fcName, v]) => ({
     fcName,
